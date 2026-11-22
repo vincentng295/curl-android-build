@@ -1,0 +1,13 @@
+* text=auto eol=lf
+*.sh  text eol=lf
+*.txt text eol=lf
+*.c   text eol=lf
+*.h   text eol=lf
+
+*.png binary
+*.jpg binary
+*.a   binary
+*.so  binary
+*.aar binary
+*.zip binary
+*.gz  binary
