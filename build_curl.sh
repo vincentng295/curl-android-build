@@ -17,12 +17,32 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 cd "$HERE"
 mkdir -p "$OUT/obj"
 
-COMMON=(-std=gnu11 -D_GNU_SOURCE -Os -ffunction-sections -fdata-sections -fstack-protector-strong -fvisibility=hidden
+# curl's config dir is generated for LP64 (config64). 32-bit targets (armeabi-v7a, x86) need different
+# SIZEOF_* values, so use config32/ when the tree ships one, otherwise derive it from config64.
+CFG=config64
+if [[ "$(echo | "$CC" -dM -E - 2>/dev/null | awk '/__SIZEOF_LONG__/{print $3}')" == 4 ]]; then
+    if [[ -d config32 ]]; then
+        CFG=config32
+    else
+        CFG="$OUT/config32"
+        rm -rf "$CFG"; cp -r config64 "$CFG"
+        # only the pointer-width dependent sizes; curl_off_t stays 64-bit on its own
+        find "$CFG" -name 'curl_config.h' -exec sed -i \
+            -e 's/^\(#define SIZEOF_LONG\) 8/\1 4/' \
+            -e 's/^\(#define SIZEOF_SIZE_T\) 8/\1 4/' \
+            -e 's/^\(#define SIZEOF_TIME_T\) 8/\1 4/' \
+            -e 's/^\(#define SIZEOF_VOIDP\) 8/\1 4/' {} +
+        LFS=-D_FILE_OFFSET_BITS=64
+        echo "    32-bit target: derived $CFG from config64 (SIZEOF_LONG/SIZE_T/TIME_T/VOIDP -> 4, large files via _FILE_OFFSET_BITS=64)"
+    fi
+fi
+
+COMMON=(-std=gnu11 -D_GNU_SOURCE ${LFS:-} -Os -ffunction-sections -fdata-sections -fstack-protector-strong -fvisibility=hidden
         -DHAVE_CONFIG_H -w)
 DEPINC="-Inghttp2/lib/includes -Inghttp3/lib/includes -Ingtcp2/lib/includes -Ingtcp2/crypto/includes -DNGHTTP2_STATICLIB -DNGHTTP3_STATICLIB -DNGTCP2_STATICLIB"
 declare -A INC=(
-  [curl/src]="-Icurl/include -Icurl/lib -Iconfig64 $DEPINC"
-  [curl/lib]="-Icurl/include -Icurl/lib -Iconfig64 -DBUILDING_LIBCURL $DEPINC"
+  [curl/src]="-Icurl/include -Icurl/lib -I$CFG $DEPINC"
+  [curl/lib]="-Icurl/include -Icurl/lib -I$CFG -DBUILDING_LIBCURL $DEPINC"
   [nghttp2]="-Inghttp2/lib/includes -Iconfig -DNGHTTP2_STATICLIB"
   [nghttp3]="-Inghttp3/lib -Inghttp3/lib/includes -Iconfig -DNGHTTP3_STATICLIB"
   [ngtcp2/lib]="-Ingtcp2/lib -Ingtcp2/lib/includes -Iconfig -DNGTCP2_STATICLIB"
